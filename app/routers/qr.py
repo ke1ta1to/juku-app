@@ -96,10 +96,7 @@ def get_current_qr_image(
     X-Token-Expires-At ヘッダーで有効期限を通知（フロントの自動リロードに使う）。
     """
     data = qr_service.generate_and_record(db)
-
-    url = f"{settings.PUBLIC_BASE_URL}/scan?token={data['token']}"
-    png = _make_qr_png(url)
-
+    png = _make_qr_png(data["token"])
     return Response(
         content=png,
         media_type="image/png",
