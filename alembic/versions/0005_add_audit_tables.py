@@ -66,7 +66,7 @@ def upgrade() -> None:
         sa.Column("detail",                sa.Text(),     nullable=True),
         sa.Column("trigger_scan_event_id", sa.Integer(),
                   sa.ForeignKey("scan_events.id", ondelete="SET NULL"), nullable=True),
-        sa.Column("resolved",              sa.Boolean(),  nullable=False, server_default=sa.text("0")),
+        sa.Column("resolved",              sa.Boolean(),  nullable=False, server_default=sa.text("false")),
         sa.Column("resolved_at",           sa.DateTime(timezone=True), nullable=True),
         sa.Column("resolved_by",           sa.Integer(),
                   sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
