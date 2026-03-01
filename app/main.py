@@ -47,24 +47,21 @@ _DASHBOARD = _HERE / "dashboard.html"
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # 🔥 환경변수 AUTO_MIGRATE=1 일 때만 migration 실행
-    if os.getenv("AUTO_MIGRATE", "0") == "1":
-        _run_migrations()
-
+    _run_migrations()   # 항상 실행
     _run_seed()
     yield
     # シャットダウン時: 必要になったら DB pool close など追加
 
 
 def _run_migrations() -> None:
-    from alembic import command
-    from alembic.config import Config as AlembicConfig
-    alembic_cfg = AlembicConfig("alembic.ini")
+    from app.db.base import Base
+    from app.db.session import engine
+
     try:
-        command.upgrade(alembic_cfg, "head")
-        logger.info("[startup] Alembic migration: 完了")
+        Base.metadata.create_all(bind=engine)
+        logger.info("[startup] DB create_all 完了")
     except Exception as e:
-        logger.error(f"[startup] Alembic migration 失敗: {e}")
+        logger.error(f"[startup] DB create_all 失敗: {e}")
         raise
 
 

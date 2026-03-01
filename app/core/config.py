@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     DEBUG: bool = True
 
     # DB設定（開発=SQLite, 本番=PostgreSQL）
-    DATABASE_URL: str = "sqlite:///./juku.db"
+    DATABASE_URL: str = os.getenv("DATABASE_URL")
 
     # JWT設定
     SECRET_KEY: str = "CHANGE_ME_IN_PRODUCTION_USE_LONG_RANDOM_STRING"
@@ -35,7 +35,7 @@ class Settings(BaseSettings):
     POLLING_INTERVAL_SECONDS: int = 4
 
     # ── 初期管理者シード ─────────────────────────────────────────────────────
-    INITIAL_ADMIN_EMAIL: str = ""
+    INITIAL_ADMIN_EMAIL: str = "admin@example.com"
     INITIAL_ADMIN_PASSWORD: str = "changeme1234!"
     INITIAL_ADMIN_NAME: str = "管理者"
 
