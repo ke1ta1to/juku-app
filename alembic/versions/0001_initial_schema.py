@@ -31,7 +31,7 @@ def upgrade() -> None:
             sa.Enum("teacher", "student", name="roleenum"),
             nullable=False,
         ),
-        sa.Column("is_admin", sa.Boolean(), nullable=False, server_default=sa.text("0")),
+        sa.Column("is_admin", sa.Boolean(), nullable=False, server_default=sa.text("false")),
         sa.Column(
             "status",
             sa.Enum("active", "inactive", name="statusenum"),
