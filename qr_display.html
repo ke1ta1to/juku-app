@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>入室QRコード</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      min-height: 100vh;
+      background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 50%, #0f172a 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', sans-serif;
+      color: #fff;
+      padding: 24px;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+
+    .header h1 {
+      font-size: clamp(1.5rem, 4vw, 2.2rem);
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      color: #e0f2fe;
+    }
+
+    .header p {
+      margin-top: 8px;
+      font-size: clamp(0.85rem, 2vw, 1rem);
+      color: #94a3b8;
+    }
+
+    .qr-card {
+      background: #ffffff;
+      border-radius: 20px;
+      padding: 28px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+      position: relative;
+    }
+
+    .qr-card img {
+      width: min(280px, 70vw);
+      height: min(280px, 70vw);
+      display: block;
+      border-radius: 8px;
+    }
+
+    .qr-placeholder {
+      width: min(280px, 70vw);
+      height: min(280px, 70vw);
+      background: #f1f5f9;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #94a3b8;
+      font-size: 0.9rem;
+    }
+
+    .status-bar {
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.8rem;
+      color: #64748b;
+      padding: 0 4px;
+    }
+
+    .status-dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #22c55e;
+      margin-right: 6px;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    .countdown-ring {
+      position: relative;
+      width: 64px;
+      height: 64px;
+    }
+
+    .countdown-ring svg {
+      transform: rotate(-90deg);
+    }
+
+    .countdown-ring .track {
+      fill: none;
+      stroke: #e2e8f0;
+      stroke-width: 5;
+    }
+
+    .countdown-ring .progress {
+      fill: none;
+      stroke: #3b82f6;
+      stroke-width: 5;
+      stroke-linecap: round;
+      stroke-dasharray: 163; /* 2π×26 */
+      stroke-dashoffset: 0;
+      transition: stroke-dashoffset 0.5s linear;
+    }
+
+    .countdown-text {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 1rem;
+      font-weight: 700;
+      color: #1e40af;
+    }
+
+    .instructions {
+      text-align: center;
+      margin-top: 28px;
+      max-width: 380px;
+    }
+
+    .instructions p {
+      font-size: clamp(0.85rem, 2.2vw, 1rem);
+      color: #cbd5e1;
+      line-height: 1.7;
+    }
+
+    .instructions strong {
+      color: #38bdf8;
+    }
+
+    .error-msg {
+      color: #f87171;
+      font-size: 0.85rem;
+      margin-top: 12px;
+      text-align: center;
+    }
+
+    /* キーフォームオーバーレイ */
+    #key-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.85);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+    }
+
+    #key-overlay.hidden { display: none; }
+
+    .key-form {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 16px;
+      padding: 36px 32px;
+      width: min(380px, 90vw);
+      text-align: center;
+    }
+
+    .key-form h2 {
+      font-size: 1.2rem;
+      margin-bottom: 8px;
+      color: #e0f2fe;
+    }
+
+    .key-form p {
+      font-size: 0.85rem;
+      color: #94a3b8;
+      margin-bottom: 20px;
+    }
+
+    .key-form input {
+      width: 100%;
+      padding: 12px 16px;
+      border-radius: 10px;
+      border: 1px solid #475569;
+      background: #0f172a;
+      color: #fff;
+      font-size: 1rem;
+      margin-bottom: 12px;
+      outline: none;
+    }
+
+    .key-form input:focus {
+      border-color: #3b82f6;
+    }
+
+    .key-form button {
+      width: 100%;
+      padding: 12px;
+      border-radius: 10px;
+      border: none;
+      background: #3b82f6;
+      color: #fff;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .key-form button:hover { background: #2563eb; }
+
+    .key-error {
+      color: #f87171;
+      font-size: 0.8rem;
+      margin-top: 8px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 表示キー入力オーバーレイ -->
+  <div id="key-overlay">
+    <div class="key-form">
+      <h2>🔐 表示キーを入力</h2>
+      <p>このページはタブレット専用です。<br>管理者から受け取った表示キーを入力してください。</p>
+      <input type="password" id="key-input" placeholder="表示キー" autocomplete="off">
+      <button onclick="startWithKey()">開始</button>
+      <div class="key-error hidden" id="key-error">表示キーが正しくありません</div>
+    </div>
+  </div>
+
+  <!-- メインコンテンツ -->
+  <div class="header">
+    <h1>📚 入室QRコード</h1>
+    <p>iPhoneのカメラで読み取ってください</p>
+  </div>
+
+  <div class="qr-card">
+    <div id="qr-placeholder" class="qr-placeholder">読み込み中...</div>
+    <img id="qr-img" src="" alt="QRコード" style="display:none">
+
+    <div class="status-bar">
+      <span><span class="status-dot"></span>自動更新中</span>
+      <div class="countdown-ring">
+        <svg width="64" height="64" viewBox="0 0 64 64">
+          <circle class="track" cx="32" cy="32" r="26"/>
+          <circle class="progress" id="progress-circle" cx="32" cy="32" r="26"/>
+        </svg>
+        <div class="countdown-text" id="countdown">60</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="instructions">
+    <p>
+      iPhoneの<strong>カメラアプリ</strong>でQRコードをスキャン<br>
+      → Safariが自動で開き出席が記録されます<br><br>
+      <span style="color:#64748b; font-size:0.85em">※ 初回のみブラウザでのログインが必要です</span>
+    </p>
+  </div>
+
+  <div class="error-msg hidden" id="error-msg"></div>
+
+  <script>
+    const CIRCUMFERENCE = 2 * Math.PI * 26; // 163.36...
+    let displayKey = '';
+    let refreshTimer = null;
+    let countdownTimer = null;
+    let expiresAt = 0;
+
+    // URLパラメータにキーがあれば自動スタート
+    const urlKey = new URLSearchParams(location.search).get('key');
+    if (urlKey) {
+      displayKey = urlKey;
+      document.getElementById('key-overlay').classList.add('hidden');
+      loadQR();
+    }
+
+    // Enterキーでも送信
+    document.getElementById('key-input').addEventListener('keydown', e => {
+      if (e.key === 'Enter') startWithKey();
+    });
+
+    function startWithKey() {
+      const k = document.getElementById('key-input').value.trim();
+      if (!k) return;
+      displayKey = k;
+      // テスト接続
+      fetch(`/api/qr/display-token?key=${encodeURIComponent(k)}`)
+        .then(r => {
+          if (!r.ok) throw new Error();
+          document.getElementById('key-overlay').classList.add('hidden');
+          // URLにキーを保存（ページリロード対応）
+          history.replaceState(null, '', `?key=${encodeURIComponent(k)}`);
+          loadQR();
+        })
+        .catch(() => {
+          document.getElementById('key-error').classList.remove('hidden');
+        });
+    }
+
+    async function loadQR() {
+      try {
+        const res = await fetch(`/api/qr/display-token/image?key=${encodeURIComponent(displayKey)}`);
+        if (!res.ok) {
+          showError('QRの取得に失敗しました（キーを確認してください）');
+          return;
+        }
+        const expStr = res.headers.get('X-Token-Expires-At');
+        expiresAt = expStr ? parseInt(expStr) * 1000 : Date.now() + 60000;
+
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+
+        const img = document.getElementById('qr-img');
+        const ph = document.getElementById('qr-placeholder');
+        img.src = url;
+        img.style.display = 'block';
+        ph.style.display = 'none';
+
+        hideError();
+        startCountdown();
+      } catch (e) {
+        showError('ネットワークエラー。再試行中...');
+        setTimeout(loadQR, 5000);
+      }
+    }
+
+    function startCountdown() {
+      if (countdownTimer) clearInterval(countdownTimer);
+      if (refreshTimer) clearTimeout(refreshTimer);
+
+      const circle = document.getElementById('progress-circle');
+      const countdownEl = document.getElementById('countdown');
+      circle.style.strokeDasharray = CIRCUMFERENCE;
+
+      countdownTimer = setInterval(() => {
+        const remaining = Math.max(0, expiresAt - Date.now());
+        const total = 60000;
+        const secs = Math.ceil(remaining / 1000);
+        const pct = remaining / total;
+        const offset = CIRCUMFERENCE * (1 - pct);
+
+        circle.style.strokeDashoffset = offset;
+        countdownEl.textContent = secs;
+
+        // 期限切れ3秒前にリロード
+        if (remaining < 3000) {
+          clearInterval(countdownTimer);
+          loadQR();
+        }
+      }, 500);
+    }
+
+    function showError(msg) {
+      const el = document.getElementById('error-msg');
+      el.textContent = msg;
+      el.classList.remove('hidden');
+    }
+
+    function hideError() {
+      document.getElementById('error-msg').classList.add('hidden');
+    }
+  </script>
+</body>
+</html>

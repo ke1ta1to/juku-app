@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>出席登録</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      min-height: 100vh;
+      background: linear-gradient(160deg, #0f172a 0%, #1e3a5f 100%);
+      font-family: 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', -apple-system, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      color: #fff;
+    }
+
+    /* ローディング画面 */
+    #screen-loading {
+      text-align: center;
+    }
+
+    .spinner {
+      width: 56px;
+      height: 56px;
+      border: 5px solid rgba(255,255,255,0.15);
+      border-top-color: #38bdf8;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 20px;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* 結果画面（成功・失敗・要ログイン） */
+    .result-card {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 24px;
+      padding: 36px 28px;
+      text-align: center;
+      max-width: 360px;
+      width: 100%;
+      backdrop-filter: blur(10px);
+    }
+
+    .icon {
+      font-size: 4rem;
+      margin-bottom: 16px;
+      display: block;
+    }
+
+    .result-card h2 {
+      font-size: 1.4rem;
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+
+    .result-card p {
+      font-size: 0.95rem;
+      color: #94a3b8;
+      line-height: 1.6;
+    }
+
+    .result-card .name {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: #e0f2fe;
+      margin: 8px 0;
+    }
+
+    /* 成功 */
+    .success h2 { color: #4ade80; }
+    .success { border-color: rgba(74, 222, 128, 0.3); }
+
+    /* 失敗 */
+    .error h2 { color: #f87171; }
+    .error { border-color: rgba(248, 113, 113, 0.3); }
+
+    /* 要ログイン */
+    .need-login h2 { color: #fbbf24; }
+    .need-login { border-color: rgba(251, 191, 36, 0.3); }
+
+    .btn {
+      display: inline-block;
+      margin-top: 20px;
+      padding: 12px 28px;
+      border-radius: 12px;
+      background: #3b82f6;
+      color: #fff;
+      font-size: 0.95rem;
+      font-weight: 600;
+      text-decoration: none;
+      cursor: pointer;
+      border: none;
+      width: 100%;
+    }
+
+    .btn:hover { background: #2563eb; }
+    .btn.secondary {
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.15);
+      margin-top: 10px;
+    }
+
+    .hidden { display: none !important; }
+
+    /* ログインフォーム */
+    .login-form {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-top: 20px;
+      width: 100%;
+    }
+
+    .login-form input {
+      padding: 12px 16px;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.2);
+      background: rgba(255,255,255,0.05);
+      color: #fff;
+      font-size: 0.95rem;
+      outline: none;
+      width: 100%;
+    }
+
+    .login-form input::placeholder { color: #64748b; }
+    .login-form input:focus { border-color: #3b82f6; }
+
+    .login-form .error-hint {
+      color: #f87171;
+      font-size: 0.8rem;
+      text-align: left;
+    }
+
+    .small {
+      font-size: 0.78rem;
+      color: #475569;
+      margin-top: 16px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ローディング -->
+  <div id="screen-loading">
+    <div class="spinner"></div>
+    <p style="color:#94a3b8">出席を記録しています...</p>
+  </div>
+
+  <!-- 成功 -->
+  <div id="screen-success" class="result-card success hidden">
+    <span class="icon" id="success-icon">✅</span>
+    <h2 id="success-title">入室しました</h2>
+    <p class="name" id="success-name"></p>
+    <p id="success-time"></p>
+    <p class="small">このページは自動で閉じられます</p>
+  </div>
+
+  <!-- エラー -->
+  <div id="screen-error" class="result-card error hidden">
+    <span class="icon">❌</span>
+    <h2>登録に失敗しました</h2>
+    <p id="error-detail"></p>
+    <button class="btn secondary" onclick="window.close()">閉じる</button>
+  </div>
+
+  <!-- 要ログイン -->
+  <div id="screen-login" class="result-card need-login hidden">
+    <span class="icon">🔑</span>
+    <h2>ログインが必要です</h2>
+    <p>初回のみログインしてください。<br>次回からはQRを読むだけで自動登録されます。</p>
+
+    <div class="login-form">
+      <input type="email" id="login-email" placeholder="メールアドレス" autocomplete="email">
+      <input type="password" id="login-password" placeholder="パスワード" autocomplete="current-password">
+      <div class="error-hint hidden" id="login-error">メールアドレスまたはパスワードが正しくありません</div>
+      <button class="btn" onclick="doLogin()">ログイン & 出席登録</button>
+    </div>
+
+    <p class="small">ログイン情報はこのデバイスに安全に保存され、<br>次回からは自動で登録されます。</p>
+  </div>
+
+  <script>
+    // URLからQRトークンを取得
+    const params = new URLSearchParams(location.search);
+    const qrToken = params.get('qr');
+
+    if (!qrToken) {
+      showError('QRコードのURLが正しくありません。もう一度読み取ってください。');
+    } else {
+      // 保存済みJWTがあれば自動でスキャン
+      const savedToken = localStorage.getItem('juku_access_token');
+      if (savedToken) {
+        doScan(savedToken);
+      } else {
+        // ログインフォームを表示
+        showLogin();
+      }
+    }
+
+    async function doScan(jwt) {
+      try {
+        const res = await fetch('/api/attendance/scan', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${jwt}`,
+          },
+          body: JSON.stringify({ qr_token: qrToken }),
+        });
+
+        const data = await res.json();
+
+        if (res.ok) {
+          showSuccess(data);
+        } else if (res.status === 401) {
+          // JWTが期限切れ → 再ログインを促す
+          localStorage.removeItem('juku_access_token');
+          showLogin();
+        } else {
+          // その他エラー（既に入退室済みなど）
+          const detail = data.detail || 'エラーが発生しました';
+          showError(detail);
+        }
+      } catch (e) {
+        showError('ネットワークエラーが発生しました。Wi-Fiを確認してください。');
+      }
+    }
+
+    async function doLogin() {
+      const email = document.getElementById('login-email').value.trim();
+      const pw = document.getElementById('login-password').value;
+      document.getElementById('login-error').classList.add('hidden');
+
+      if (!email || !pw) return;
+
+      // FastAPI OAuth2 形式でログイン
+      const form = new URLSearchParams();
+      form.append('username', email);
+      form.append('password', pw);
+
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: form.toString(),
+        });
+
+        if (!res.ok) {
+          document.getElementById('login-error').classList.remove('hidden');
+          return;
+        }
+
+        const data = await res.json();
+        const jwt = data.access_token;
+
+        // JWTを保存
+        localStorage.setItem('juku_access_token', jwt);
+
+        // ローディングに戻してスキャン
+        document.getElementById('screen-login').classList.add('hidden');
+        document.getElementById('screen-loading').classList.remove('hidden');
+        doScan(jwt);
+
+      } catch (e) {
+        document.getElementById('login-error').classList.remove('hidden');
+      }
+    }
+
+    function showSuccess(data) {
+      hide('screen-loading');
+      const isCheckIn = data.result === 'check_in';
+      document.getElementById('success-icon').textContent = isCheckIn ? '✅' : '👋';
+      document.getElementById('success-title').textContent = isCheckIn ? '入室しました' : '退室しました';
+      document.getElementById('success-name').textContent = `${data.user_name} さん`;
+
+      const ts = data.timestamp ? new Date(data.timestamp) : new Date();
+      document.getElementById('success-time').textContent =
+        ts.toLocaleString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+
+      show('screen-success');
+
+      // 3秒後に自動でページを閉じる（または前のページに戻る）
+      setTimeout(() => {
+        if (window.history.length > 1) {
+          history.back();
+        } else {
+          window.close();
+        }
+      }, 3000);
+    }
+
+    function showError(msg) {
+      hide('screen-loading');
+      hide('screen-login');
+      document.getElementById('error-detail').textContent = msg;
+      show('screen-error');
+    }
+
+    function showLogin() {
+      hide('screen-loading');
+      show('screen-login');
+      // Enterキーでログイン
+      document.getElementById('login-password').addEventListener('keydown', e => {
+        if (e.key === 'Enter') doLogin();
+      });
+    }
+
+    function show(id) { document.getElementById(id).classList.remove('hidden'); }
+    function hide(id) { document.getElementById(id).classList.add('hidden'); }
+  </script>
+</body>
+</html>

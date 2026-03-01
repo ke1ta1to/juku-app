@@ -54,16 +54,39 @@ async def lifespan(app: FastAPI):
 
 
 def _run_migrations() -> None:
-    from app.db.base import Base
-    from app.db.session import engine
+    """
+    Alembic マイグレーションを自動適用する。
+    AUTO_MIGRATE=1 の場合は alembic upgrade head を実行。
+    未設定の場合は create_all にフォールバック（ローカル開発用）。
+    """
+    import os
+    from app.core.config import settings
 
-    try:
-        Base.metadata.create_all(bind=engine)
-        logger.info("[startup] DB create_all 完了")
-    except Exception as e:
-        logger.error(f"[startup] DB create_all 失敗: {e}")
-        raise
+    auto_migrate = os.environ.get("AUTO_MIGRATE", "0") == "1"
 
+    if auto_migrate:
+        try:
+            from alembic.config import Config
+            from alembic import command
+
+            alembic_cfg = Config("alembic.ini")
+            # 環境変数の DATABASE_URL を優先（alembic.ini の値を上書き）
+            alembic_cfg.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+            command.upgrade(alembic_cfg, "head")
+            logger.info("[startup] Alembic マイグレーション完了")
+        except Exception as e:
+            logger.error(f"[startup] Alembic マイグレーション失敗: {e}")
+            raise
+    else:
+        # ローカル開発用フォールバック（SQLite など）
+        from app.db.base import Base
+        from app.db.session import engine
+        try:
+            Base.metadata.create_all(bind=engine)
+            logger.info("[startup] DB create_all 完了（AUTO_MIGRATE 未設定）")
+        except Exception as e:
+            logger.error(f"[startup] DB create_all 失敗: {e}")
+            raise
 
 def _run_seed() -> None:
     if not settings.INITIAL_ADMIN_EMAIL:
