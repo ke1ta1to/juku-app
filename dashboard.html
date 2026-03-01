@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>出席ダッシュボード</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:        #0a0c10;
+    --surface:   #111318;
+    --border:    #1e2230;
+    --accent:    #4ade80;       /* 在室 */
+    --out:       #60a5fa;       /* 退室済 */
+    --absent:    #374151;       /* 欠席 */
+    --warn:      #f59e0b;
+    --text:      #e2e8f0;
+    --muted:     #64748b;
+    --card-r:    14px;
+    --mono:      'DM Mono', monospace;
+    --sans:      'Outfit', sans-serif;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ─── グリッドノイズ背景 ─── */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image:
+      radial-gradient(ellipse 60% 40% at 80% 10%, rgba(74,222,128,.06) 0%, transparent 60%),
+      repeating-linear-gradient(0deg, transparent, transparent 39px, rgba(255,255,255,.015) 39px, rgba(255,255,255,.015) 40px),
+      repeating-linear-gradient(90deg, transparent, transparent 39px, rgba(255,255,255,.015) 39px, rgba(255,255,255,.015) 40px);
+    pointer-events: none; z-index: 0;
+  }
+
+  .wrap { position: relative; z-index: 1; max-width: 1200px; margin: 0 auto; padding: 24px 20px; }
+
+  /* ─── ログイン画面 ─── */
+  #login-screen {
+    min-height: 100vh; display: flex; align-items: center; justify-content: center;
+  }
+  .login-box {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--card-r); padding: 48px 44px; width: 100%; max-width: 380px;
+  }
+  .login-box h1 { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+  .login-box p  { color: var(--muted); font-size: 13px; margin-bottom: 32px; }
+  .field { margin-bottom: 16px; }
+  .field label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; letter-spacing:.05em; text-transform: uppercase; }
+  .field input {
+    width: 100%; background: var(--bg); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 14px; color: var(--text);
+    font-family: var(--mono); font-size: 14px; outline: none;
+    transition: border-color .2s;
+  }
+  .field input:focus { border-color: var(--accent); }
+  .btn {
+    width: 100%; padding: 12px; background: var(--accent); color: #0a0c10;
+    font-family: var(--sans); font-size: 14px; font-weight: 700;
+    border: none; border-radius: 8px; cursor: pointer; transition: opacity .2s;
+  }
+  .btn:hover { opacity: .85; }
+  .btn:disabled { opacity: .4; cursor: default; }
+  .err { color: #f87171; font-size: 12px; margin-top: 10px; min-height: 18px; }
+
+  /* ─── ヘッダー ─── */
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 28px; padding-bottom: 20px;
+    border-bottom: 1px solid var(--border);
+  }
+  .logo { display: flex; align-items: center; gap: 12px; }
+  .logo-dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 12px var(--accent);
+    animation: pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%,100% { box-shadow: 0 0 12px var(--accent); }
+    50%      { box-shadow: 0 0 24px var(--accent), 0 0 40px rgba(74,222,128,.3); }
+  }
+  .logo h1 { font-size: 18px; font-weight: 700; letter-spacing: -.02em; }
+  .logo span { color: var(--muted); font-size: 13px; }
+
+  .header-right { display: flex; align-items: center; gap: 16px; }
+  .ws-badge {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 11px; font-family: var(--mono);
+    color: var(--muted);
+  }
+  .ws-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--absent); transition: background .4s;
+  }
+  .ws-dot.connected { background: var(--accent); }
+  .logout-btn {
+    font-size: 12px; color: var(--muted); background: none;
+    border: 1px solid var(--border); border-radius: 6px;
+    padding: 6px 12px; cursor: pointer; transition: color .2s, border-color .2s;
+  }
+  .logout-btn:hover { color: var(--text); border-color: var(--muted); }
+
+  /* ─── 統計カード ─── */
+  .stats-row { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; margin-bottom: 24px; }
+  @media(max-width:700px) { .stats-row { grid-template-columns: repeat(2,1fr); } }
+
+  .stat-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--card-r); padding: 18px 20px;
+    position: relative; overflow: hidden;
+    transition: border-color .3s;
+  }
+  .stat-card.--present  { border-color: rgba(74,222,128,.3); }
+  .stat-card.--out      { border-color: rgba(96,165,250,.2); }
+
+  .stat-card::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: var(--accent-color, var(--border));
+    opacity: .7;
+  }
+  .stat-card.--present::before  { --accent-color: var(--accent); }
+  .stat-card.--out::before      { --accent-color: var(--out); }
+  .stat-card.--total::before    { --accent-color: #a78bfa; }
+
+  .stat-label { font-size: 11px; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; margin-bottom: 10px; }
+  .stat-num   { font-size: 36px; font-weight: 700; font-family: var(--mono); line-height: 1; }
+  .stat-num.--present { color: var(--accent); }
+  .stat-num.--out     { color: var(--out); }
+  .stat-sub   { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+  /* ─── セクションタイトル ─── */
+  .section-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 14px;
+  }
+  .section-title { font-size: 13px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+  .poll-indicator {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 11px; font-family: var(--mono); color: var(--muted);
+  }
+  .poll-ring {
+    width: 14px; height: 14px;
+    border: 1.5px solid var(--border); border-top-color: var(--accent);
+    border-radius: 50%;
+  }
+  .poll-ring.--spinning { animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ─── 在室一覧テーブル ─── */
+  .live-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 10px;
+    min-height: 120px;
+  }
+
+  .person-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--card-r);
+    padding: 14px 16px;
+    display: flex; flex-direction: column; gap: 6px;
+    animation: fadeIn .3s ease;
+    transition: border-color .3s, transform .2s;
+  }
+  .person-card:hover { border-color: rgba(74,222,128,.35); transform: translateY(-1px); }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .person-card.--new {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px rgba(74,222,128,.2), inset 0 0 20px rgba(74,222,128,.04);
+    animation: newEntry .5s ease;
+  }
+  @keyframes newEntry {
+    0%   { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(74,222,128,.4); }
+    100% { border-color: rgba(74,222,128,.35); box-shadow: 0 0 0 0 transparent; }
+  }
+
+  .person-name { font-size: 15px; font-weight: 600; }
+  .person-meta { display: flex; align-items: center; gap: 8px; }
+  .role-tag {
+    font-size: 10px; font-family: var(--mono);
+    padding: 2px 7px; border-radius: 20px;
+    background: rgba(255,255,255,.06); color: var(--muted);
+  }
+  .method-tag {
+    font-size: 10px; font-family: var(--mono);
+    padding: 2px 7px; border-radius: 20px;
+  }
+  .method-tag.qr     { background: rgba(74,222,128,.12); color: var(--accent); }
+  .method-tag.manual { background: rgba(96,165,250,.12);  color: var(--out); }
+
+  .checkin-time { font-size: 12px; font-family: var(--mono); color: var(--muted); }
+
+  .empty-state {
+    grid-column: 1/-1;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 48px 0; gap: 10px; color: var(--muted);
+    border: 1px dashed var(--border); border-radius: var(--card-r);
+  }
+  .empty-state .icon { font-size: 32px; opacity: .4; }
+  .empty-state p { font-size: 13px; }
+
+  /* ─── 今日の全員ビュー ─── */
+  .today-list { display: flex; flex-direction: column; gap: 2px; margin-top: 20px; }
+  .today-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 14px; border-radius: 8px;
+    transition: background .15s;
+  }
+  .today-row:hover { background: rgba(255,255,255,.03); }
+  .today-dot {
+    width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  }
+  .today-dot.checked_in  { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+  .today-dot.checked_out { background: var(--out); }
+  .today-dot.absent      { background: var(--absent); }
+  .today-name  { flex: 1; font-size: 13px; }
+  .today-role  { font-size: 11px; font-family: var(--mono); color: var(--muted); width: 48px; }
+  .today-status {
+    font-size: 11px; font-family: var(--mono);
+    padding: 2px 9px; border-radius: 20px;
+    min-width: 72px; text-align: center;
+  }
+  .today-status.checked_in  { background: rgba(74,222,128,.15); color: var(--accent); }
+  .today-status.checked_out { background: rgba(96,165,250,.12);  color: var(--out); }
+  .today-status.absent      { background: rgba(55,65,81,.5);     color: var(--muted); }
+  .today-time { font-size: 11px; font-family: var(--mono); color: var(--muted); width: 80px; text-align: right; }
+
+  /* ─── イベントログ ─── */
+  .event-log {
+    margin-top: 24px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--card-r); overflow: hidden;
+  }
+  .event-log-header {
+    padding: 12px 16px; border-bottom: 1px solid var(--border);
+    font-size: 11px; color: var(--muted); letter-spacing: .06em; text-transform: uppercase;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .event-log-body { max-height: 180px; overflow-y: auto; font-family: var(--mono); font-size: 12px; }
+  .event-item {
+    display: flex; gap: 12px; align-items: baseline;
+    padding: 8px 16px; border-bottom: 1px solid rgba(255,255,255,.03);
+    animation: slideIn .25s ease;
+  }
+  @keyframes slideIn { from { opacity: 0; transform: translateX(-8px); } }
+  .event-time  { color: var(--muted); white-space: nowrap; width: 52px; }
+  .event-type  { width: 64px; }
+  .event-type.check_in  { color: var(--accent); }
+  .event-type.check_out { color: var(--out); }
+  .event-name  { color: var(--text); }
+  .event-method { color: var(--muted); }
+
+  .divider { height: 1px; background: var(--border); margin: 28px 0; }
+
+  /* ─── スクロールバー ─── */
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  /* ─── Tab ─── */
+  .tabs { display: flex; gap: 4px; margin-bottom: 16px; }
+  .tab-btn {
+    padding: 7px 16px; font-size: 12px; font-family: var(--sans);
+    border: 1px solid var(--border); border-radius: 6px;
+    background: none; color: var(--muted); cursor: pointer;
+    transition: all .2s;
+  }
+  .tab-btn.--active { background: rgba(74,222,128,.1); border-color: rgba(74,222,128,.4); color: var(--accent); }
+
+  #tab-today { display: none; }
+</style>
+</head>
+<body>
+
+<!-- ═══ ログイン画面 ═══════════════════════════════════════════ -->
+<div id="login-screen">
+  <div class="login-box">
+    <h1>🏫 出席管理</h1>
+    <p>先生アカウントでログインしてください</p>
+    <div class="field">
+      <label>メールアドレス</label>
+      <input id="email" type="email" placeholder="teacher@example.com" autocomplete="username">
+    </div>
+    <div class="field">
+      <label>パスワード</label>
+      <input id="password" type="password" placeholder="••••••••" autocomplete="current-password">
+    </div>
+    <button class="btn" id="login-btn" onclick="doLogin()">ログイン</button>
+    <div class="err" id="login-err"></div>
+  </div>
+</div>
+
+<!-- ═══ ダッシュボード ════════════════════════════════════════════ -->
+<div id="dashboard" style="display:none">
+<div class="wrap">
+
+  <!-- ヘッダー -->
+  <header>
+    <div class="logo">
+      <div class="logo-dot"></div>
+      <div>
+        <h1>出席ダッシュボード</h1>
+        <span id="today-date"></span>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="ws-badge">
+        <div class="ws-dot" id="ws-dot"></div>
+        <span id="ws-label">切断</span>
+      </div>
+      <button class="logout-btn" onclick="doLogout()">ログアウト</button>
+    </div>
+  </header>
+
+  <!-- 統計カード -->
+  <div class="stats-row">
+    <div class="stat-card --present">
+      <div class="stat-label">現在在室中</div>
+      <div class="stat-num --present" id="s-present">—</div>
+      <div class="stat-sub">人</div>
+    </div>
+    <div class="stat-card --out">
+      <div class="stat-label">退室済み</div>
+      <div class="stat-num --out" id="s-out">—</div>
+      <div class="stat-sub">人</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">未出席</div>
+      <div class="stat-num" id="s-absent">—</div>
+      <div class="stat-sub">人</div>
+    </div>
+    <div class="stat-card --total">
+      <div class="stat-label">在籍合計</div>
+      <div class="stat-num" id="s-total">—</div>
+      <div class="stat-sub">名</div>
+    </div>
+  </div>
+
+  <!-- 在室中グリッド -->
+  <div class="section-header">
+    <span class="section-title">在室中</span>
+    <div class="poll-indicator">
+      <div class="poll-ring" id="poll-ring"></div>
+      <span id="poll-label">4秒ごとに更新</span>
+    </div>
+  </div>
+  <div class="live-grid" id="live-grid">
+    <div class="empty-state">
+      <div class="icon">🏫</div>
+      <p>読み込み中…</p>
+    </div>
+  </div>
+
+  <!-- タブ：今日の全員 -->
+  <div class="divider"></div>
+  <div class="section-header">
+    <div class="tabs">
+      <button class="tab-btn --active" onclick="switchTab('live')">在室中</button>
+      <button class="tab-btn" onclick="switchTab('today')">今日の全員</button>
+    </div>
+  </div>
+
+  <div id="tab-today">
+    <div class="today-list" id="today-list"></div>
+  </div>
+
+  <!-- イベントログ -->
+  <div class="event-log">
+    <div class="event-log-header">
+      <span>📋</span> イベントログ（WebSocket）
+    </div>
+    <div class="event-log-body" id="event-log-body">
+    </div>
+  </div>
+
+</div><!-- .wrap -->
+</div><!-- #dashboard -->
+
+<script>
+// ══════════════════════════════════════════════════════════════
+//  設定
+// ══════════════════════════════════════════════════════════════
+const API_BASE = '';   // 同オリジン想定。外部の場合は 'https://your-server' に変更
+const POLL_INTERVAL = 4000;   // ポーリング間隔 (ms)
+const STATS_INTERVAL = 15000; // 統計ポーリング間隔 (ms)
+const WS_RECONNECT   = 3000;  // WS 再接続間隔 (ms)
+
+// ── 状態 ──────────────────────────────────────────────────────
+let token   = sessionStorage.getItem('juku_token') || '';
+let etag    = null;
+let ws      = null;
+let wsRetry = null;
+let currentTab = 'live';
+let liveData = [];
+
+// ══════════════════════════════════════════════════════════════
+//  ログイン
+// ══════════════════════════════════════════════════════════════
+async function doLogin() {
+  const email = document.getElementById('email').value.trim();
+  const pw    = document.getElementById('password').value;
+  const err   = document.getElementById('login-err');
+  const btn   = document.getElementById('login-btn');
+  if (!email || !pw) { err.textContent = 'メールとパスワードを入力してください'; return; }
+
+  btn.disabled = true; btn.textContent = '確認中…';
+  err.textContent = '';
+
+  try {
+    const fd = new FormData();
+    fd.append('username', email);
+    fd.append('password', pw);
+    const res = await fetch(`${API_BASE}/api/auth/login`, { method: 'POST', body: fd });
+    if (!res.ok) throw new Error((await res.json()).detail || 'ログイン失敗');
+    const data = await res.json();
+
+    if (data.user.role !== 'teacher') {
+      throw new Error('このダッシュボードは教師専用です');
+    }
+
+    token = data.access_token;
+    sessionStorage.setItem('juku_token', token);
+    startDashboard();
+  } catch(e) {
+    err.textContent = e.message;
+  } finally {
+    btn.disabled = false; btn.textContent = 'ログイン';
+  }
+}
+
+document.getElementById('password').addEventListener('keydown', e => {
+  if (e.key === 'Enter') doLogin();
+});
+
+function doLogout() {
+  sessionStorage.removeItem('juku_token');
+  token = ''; etag = null;
+  if (ws) { ws.close(); ws = null; }
+  if (wsRetry) { clearTimeout(wsRetry); wsRetry = null; }
+  document.getElementById('dashboard').style.display = 'none';
+  document.getElementById('login-screen').style.display = 'flex';
+}
+
+// ══════════════════════════════════════════════════════════════
+//  ダッシュボード起動
+// ══════════════════════════════════════════════════════════════
+function startDashboard() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('dashboard').style.display = 'block';
+
+  // 今日の日付表示
+  const d = new Date();
+  document.getElementById('today-date').textContent =
+    d.toLocaleDateString('ja-JP', { year:'numeric', month:'long', day:'numeric', weekday:'short' });
+
+  // 初回取得
+  fetchLive();
+  fetchStats();
+  fetchToday();
+
+  // ポーリング開始
+  setInterval(fetchLive,  POLL_INTERVAL);
+  setInterval(fetchStats, STATS_INTERVAL);
+  setInterval(fetchToday, STATS_INTERVAL);
+
+  // WebSocket 接続
+  connectWS();
+}
+
+// ══════════════════════════════════════════════════════════════
+//  WebSocket
+// ══════════════════════════════════════════════════════════════
+function connectWS() {
+  if (!token) return;
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  const url   = `${proto}://${location.host}/ws/live?token=${encodeURIComponent(token)}`;
+
+  ws = new WebSocket(url);
+
+  ws.onopen = () => {
+    setWsBadge(true);
+    if (wsRetry) { clearTimeout(wsRetry); wsRetry = null; }
+  };
+
+  ws.onmessage = (e) => {
+    const ev = JSON.parse(e.data);
+
+    if (ev.event === 'ping' || ev.event === 'connected') return;
+
+    if (ev.event === 'check_in' || ev.event === 'check_out') {
+      // 即時カウンター更新（ポーリングより先に反映）
+      if (ev.live_count !== undefined) {
+        document.getElementById('s-present').textContent = ev.live_count;
+      }
+      // /live と /stats を即時再取得（WS はカウントだけ、詳細はAPIから）
+      fetchLive(true);   // force=true → ETag 無視
+      fetchStats();
+      fetchToday();
+
+      // イベントログ追記
+      appendLog(ev);
+    }
+  };
+
+  ws.onclose = () => {
+    setWsBadge(false);
+    // 自動再接続
+    wsRetry = setTimeout(connectWS, WS_RECONNECT);
+  };
+
+  ws.onerror = () => ws.close();
+}
+
+function setWsBadge(connected) {
+  document.getElementById('ws-dot').className   = 'ws-dot' + (connected ? ' connected' : '');
+  document.getElementById('ws-label').textContent = connected ? 'リアルタイム' : '切断（再接続中…）';
+}
+
+// ══════════════════════════════════════════════════════════════
+//  API フェッチ
+// ══════════════════════════════════════════════════════════════
+async function apiFetch(path, opts = {}) {
+  return fetch(`${API_BASE}${path}`, {
+    ...opts,
+    headers: { Authorization: `Bearer ${token}`, ...(opts.headers || {}) },
+  });
+}
+
+// /live（ETag 対応）
+async function fetchLive(force = false) {
+  const ring = document.getElementById('poll-ring');
+  ring.classList.add('--spinning');
+
+  try {
+    const headers = (!force && etag) ? { 'If-None-Match': etag } : {};
+    const res = await apiFetch('/api/attendance/live', { headers });
+
+    if (res.status === 304) {
+      // 変化なし
+      return;
+    }
+    if (!res.ok) { if (res.status === 401) doLogout(); return; }
+
+    etag = res.headers.get('ETag') || null;
+    liveData = await res.json();
+    renderLiveGrid(liveData);
+
+    document.getElementById('poll-label').textContent =
+      new Date().toLocaleTimeString('ja-JP', { hour:'2-digit', minute:'2-digit', second:'2-digit' }) + ' 更新';
+  } catch(e) {
+    console.warn('live fetch error:', e);
+  } finally {
+    ring.classList.remove('--spinning');
+  }
+}
+
+// /stats
+async function fetchStats() {
+  try {
+    const res = await apiFetch('/api/attendance/stats');
+    if (!res.ok) return;
+    const s = await res.json();
+    document.getElementById('s-present').textContent = s.present;
+    document.getElementById('s-out').textContent     = s.checked_out;
+    document.getElementById('s-absent').textContent  = s.absent;
+    document.getElementById('s-total').textContent   = s.total_active;
+  } catch(e) {}
+}
+
+// /today
+async function fetchToday() {
+  try {
+    const res = await apiFetch('/api/attendance/today');
+    if (!res.ok) return;
+    const rows = await res.json();
+    renderTodayList(rows);
+  } catch(e) {}
+}
+
+// ══════════════════════════════════════════════════════════════
+//  レンダリング
+// ══════════════════════════════════════════════════════════════
+
+// 直前の在室IDセット（新規入室のハイライトに使う）
+let prevLiveIds = new Set();
+
+function renderLiveGrid(entries) {
+  const grid = document.getElementById('live-grid');
+  const newIds = new Set(entries.map(e => e.user_id));
+
+  if (entries.length === 0) {
+    grid.innerHTML = `
+      <div class="empty-state">
+        <div class="icon">🏫</div>
+        <p>現在在室中のメンバーはいません</p>
+      </div>`;
+    prevLiveIds = newIds;
+    return;
+  }
+
+  grid.innerHTML = entries.map(e => {
+    const isNew = !prevLiveIds.has(e.user_id) && prevLiveIds.size > 0;
+    const time = new Date(e.check_in_at).toLocaleTimeString('ja-JP', { hour:'2-digit', minute:'2-digit' });
+    const method = e.method_in || 'manual';
+    return `
+      <div class="person-card ${isNew ? '--new' : ''}">
+        <div class="person-name">${esc(e.user_name)}</div>
+        <div class="person-meta">
+          <span class="role-tag">${e.user_role === 'student' ? '生徒' : '教師'}</span>
+          <span class="method-tag ${method}">${method === 'qr' ? 'QR' : '手動'}</span>
+        </div>
+        <div class="checkin-time">⏱ ${time} 入室</div>
+      </div>`;
+  }).join('');
+
+  prevLiveIds = newIds;
+}
+
+function renderTodayList(rows) {
+  const list = document.getElementById('today-list');
+  if (!rows.length) { list.innerHTML = '<div style="padding:20px;color:var(--muted);font-size:13px">データなし</div>'; return; }
+
+  const statusLabel = { checked_in: '在室中', checked_out: '退室済', absent: '未出席' };
+  list.innerHTML = rows.map(r => {
+    const time = r.check_in_at
+      ? new Date(r.check_in_at).toLocaleTimeString('ja-JP', { hour:'2-digit', minute:'2-digit' })
+      : '—';
+    return `
+      <div class="today-row">
+        <div class="today-dot ${r.attendance_status}"></div>
+        <div class="today-name">${esc(r.user_name)}</div>
+        <div class="today-role">${r.user_role === 'student' ? '生徒' : '教師'}</div>
+        <div class="today-status ${r.attendance_status}">${statusLabel[r.attendance_status]}</div>
+        <div class="today-time">${time}</div>
+      </div>`;
+  }).join('');
+}
+
+function appendLog(ev) {
+  const body = document.getElementById('event-log-body');
+  const time = new Date(ev.timestamp).toLocaleTimeString('ja-JP', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+  const label = ev.event === 'check_in' ? '入室' : '退室';
+  const method = ev.method === 'qr' ? 'QR' : '手動';
+
+  const item = document.createElement('div');
+  item.className = 'event-item';
+  item.innerHTML = `
+    <span class="event-time">${time}</span>
+    <span class="event-type ${ev.event}">${label}</span>
+    <span class="event-name">${esc(ev.user_name)}</span>
+    <span class="event-method">(${method})</span>`;
+
+  body.prepend(item);
+
+  // 最大 50 件
+  while (body.children.length > 50) body.removeChild(body.lastChild);
+}
+
+// ══════════════════════════════════════════════════════════════
+//  タブ切替
+// ══════════════════════════════════════════════════════════════
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.tab-btn').forEach((b, i) => {
+    b.classList.toggle('--active', (i === 0) === (tab === 'live'));
+  });
+  document.getElementById('tab-today').style.display = tab === 'today' ? 'block' : 'none';
+  document.getElementById('live-grid').style.display  = tab === 'live'  ? 'grid'  : 'none';
+}
+
+// ══════════════════════════════════════════════════════════════
+//  ユーティリティ
+// ══════════════════════════════════════════════════════════════
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── 自動ログイン（セッションにトークンがある場合）────────────────────────────
+if (token) {
+  // トークンの有効性を /auth/me で確認してから起動
+  fetch(`${API_BASE}/api/auth/me`, {
+    headers: { Authorization: `Bearer ${token}` }
+  }).then(r => {
+    if (r.ok) return r.json().then(u => {
+      if (u.role === 'teacher') { startDashboard(); }
+      else { sessionStorage.removeItem('juku_token'); token = ''; }
+    });
+    sessionStorage.removeItem('juku_token'); token = '';
+  }).catch(() => { sessionStorage.removeItem('juku_token'); token = ''; });
+}
+</script>
+</body>
+</html>
