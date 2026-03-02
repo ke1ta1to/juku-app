@@ -6,6 +6,9 @@ class Settings(BaseSettings):
     APP_NAME: str = "JukuApp"
     DEBUG: bool = True
 
+    # アプリURL（QRコードにフルURLを埋め込むため必要）
+    BASE_URL: str = "http://localhost:8000"
+
     # DB設定（開発=SQLite, 本番=PostgreSQL）
     DATABASE_URL: str = "sqlite:///./juku.db"
 
@@ -19,6 +22,7 @@ class Settings(BaseSettings):
     QR_TOKEN_EXPIRE_SECONDS: int = 60
     ACADEMY_ID: str = "juku01"
     QR_GRACE_WINDOWS: int = 1
+    QR_DISPLAY_KEY: str = "changeme-display-key"
 
     # ── 不正検知設定 ──────────────────────────────────────────────────────────
     # 1トークン当たりの許容スキャン数（50人塾想定。超えたらアラート）

@@ -40,6 +40,12 @@ from app.services import attendance_service, qr_service
 router = APIRouter(prefix="/api/qr", tags=["qr"])
 
 
+def _make_checkin_url(token: str) -> str:
+    """QRに埋め込むチェックインURL（生徒がスキャンして開くURL）"""
+    from app.core.config import settings as s
+    return f"{s.BASE_URL.rstrip('/')}/checkin?qr={token}"
+
+
 def _make_qr_png(token: str) -> bytes:
     """トークン文字列から QR コード PNG bytes を生成"""
     img = qrcode.make(token)
