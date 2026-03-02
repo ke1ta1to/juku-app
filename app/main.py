@@ -43,7 +43,8 @@ logger = logging.getLogger(__name__)
 _HERE = Path(__file__).parent.parent  # プロジェクトルート（manage.py と同列）
 _STATIC_DIR = _HERE / "static"
 _DASHBOARD = _HERE / "dashboard.html"
-
+_QR_DISPLAY = _HERE / "qr_display.html"   # タブレット用QR表示ページ
+_CHECKIN = _HERE / "checkin.html"          # 学生チェックインページ
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -143,6 +144,21 @@ def serve_dashboard():
         return FileResponse(str(_DASHBOARD), media_type="text/html")
     return {"detail": "dashboard.html が見つかりません"}
 
+
+@app.get("/qr-display", include_in_schema=False)
+@app.get("/qr-display.html", include_in_schema=False)
+def serve_qr_display():
+    if _QR_DISPLAY.exists():
+        return FileResponse(str(_QR_DISPLAY), media_type="text/html")
+    return {"detail": "qr_display.html が見つかりません"}
+
+
+@app.get("/checkin", include_in_schema=False)
+@app.get("/checkin.html", include_in_schema=False)
+def serve_checkin():
+    if _CHECKIN.exists():
+        return FileResponse(str(_CHECKIN), media_type="text/html")
+    return {"detail": "checkin.html が見つかりません"}
 
 # ── ルーター登録 ───────────────────────────────────────────────────────────
 from app.routers import auth, users, attendance as att_router, qr, ws, audit  # noqa: E402
